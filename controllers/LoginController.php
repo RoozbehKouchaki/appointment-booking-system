@@ -1,25 +1,34 @@
 <?php
 session_start();
 require '../config/config.php';
+require '../models/User.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email = trim($_POST['email']);
-    $password = $_POST['password'];
-
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
-    $stmt->execute([$email]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($user && password_verify($password, $user['password'])) {
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['username'] = $user['username'];
-        header('Location: ../search_appointments.php');  // Redirect on success
-        exit();
-    } else {
-        echo "❌ Invalid email or password.";
-        echo '<br><a href="../views/login.php">Back to Login</a>';
-    }
-} else {
-    echo "❌ Invalid request!";
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    die("❌ Invalid request!");
 }
+
+$email = trim($_POST['email']);
+$password = $_POST['password'];
+
+// 🔎 Find user by email
+$user = User::findByEmail($pdo, $email);
+
+if (!$user) {
+    echo "❌ User not found.";
+    echo '<br><a href="../views/login.php">🔙 Back to Login</a>';
+    exit();
+}
+
+// 🔑 Verify password
+if (!$user->verifyPassword($password)) {
+    echo "❌ Incorrect password.";
+    echo '<br><a href="../views/login.php">🔙 Back to Login</a>';
+    exit();
+}
+
+// ✅ Successful login
+$_SESSION['user_id'] = $user->getId();
+$_SESSION['username'] = $user->getUsername();
+header('Location: ../views/dashboard.php');
+exit();
 ?>

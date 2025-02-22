@@ -1,7 +1,11 @@
 <?php
 session_start();
-session_unset();  // Clear session variables
-session_destroy();  // Destroy the session
-header("Location: ../views/login.php");  // Redirect to login page
+require '../models/SessionManager.php';
+
+// 🔒 Logout and clear session
+SessionManager::logout();
+
+// 🔄 Redirect to login page
+header("Location: ../views/login.php");
 exit();
 ?>
