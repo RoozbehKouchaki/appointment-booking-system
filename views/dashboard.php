@@ -1,31 +1,31 @@
 <?php
-session_start();
-
 // Redirect if not logged in
 if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
+    header('Location: /login');
     exit();
 }
+
+include __DIR__ . '/../views/layouts/header.php'; 
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>User Dashboard</title>
-</head>
-<body>
-    <h2>Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?>!</h2>
-    <p>Choose an option:</p>
+<div class="container mt-5">
+    <div class="card shadow-lg">
+        <div class="card-body text-center">
+        <h2 class="mb-4">👋 Welcome, <?= htmlspecialchars($_SESSION['username'] ?? 'Guest'); ?>!</h2>
+                    <p class="lead">Choose an option:</p>
 
-    <ul>
-        <li><a href="my_appointments.php">📅 View My Appointments</a></li>
-        <li><a href="book_appointment.php">📝 Book an Appointment</a></li>
-    </ul>
+            <div class="d-grid gap-3 col-6 mx-auto">
+                <a href="/appointments" class="btn btn-primary btn-lg">📅 View My Appointments</a>
+                <a href="/book" class="btn btn-success btn-lg">📝 Book an Appointment</a>
+            </div>
 
-    <hr>
-    <form action="../controllers/LogoutController.php" method="POST">
-        <button type="submit">🚪 Logout</button>
-    </form>
-</body>
-</html>
+            <hr class="my-4">
+
+            <form action="/logout" method="POST">
+                <button type="submit" class="btn btn-danger">🚪 Logout</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<?php include __DIR__ . '/../views/layouts/footer.php'; ?>

@@ -1,106 +1,150 @@
 <?php
-session_start();
 require '../config/config.php';
+include '../views/layouts/header.php';
 
 if (!isset($_SESSION['user_id'])) {
-    die("❌ You must be logged in to modify an appointment.");
+    die("You must be logged in to modify an appointment.");
 }
 
-$appointment_id = $_GET['appointment_id'] ?? null;
-$selected_service_id = $_GET['service_id'] ?? null;
-$selected_doctor_id = $_GET['doctor_id'] ?? null;
+// Get appointment ID from clean URL
+$appointment_id = null;
+if (preg_match('#/appointments/modify/(\d+)#', $_SERVER['REQUEST_URI'], $matches)) {
+    $appointment_id = $matches[1];
+}
 
 if (!$appointment_id) {
-    die("❌ No appointment selected.");
+    die("No appointment selected.");
 }
-
-// Fetch current appointment details
-$stmt = $pdo->prepare("
-    SELECT a.id AS appointment_id, a.slot_id, s.id AS service_id, d.id AS doctor_id
-    FROM appointments a
-    JOIN services s ON a.service_id = s.id
-    JOIN available_slots aslots ON a.slot_id = aslots.id
-    JOIN doctors d ON aslots.doctor_id = d.id
-    WHERE a.id = ?
-");
-$stmt->execute([$appointment_id]);
-$appointment = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$appointment) {
-    die("❌ Appointment not found.");
-}
-
-// Use appointment data if no new selections are made
-$service_id = $selected_service_id ?? $appointment['service_id'];
-$doctor_id = $selected_doctor_id ?? $appointment['doctor_id'];
-
-// Fetch all services
-$services = $pdo->query("SELECT id, name FROM services")->fetchAll(PDO::FETCH_ASSOC);
-
-// Fetch doctors for the selected service
-$doctorStmt = $pdo->prepare("
-    SELECT d.id, d.name 
-    FROM doctors d
-    JOIN doctor_services ds ON d.id = ds.doctor_id
-    WHERE ds.service_id = ?
-");
-$doctorStmt->execute([$service_id]);
-$doctors = $doctorStmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Fetch available slots for the selected doctor
-$slotStmt = $pdo->prepare("
-    SELECT id, slot_datetime 
-    FROM available_slots 
-    WHERE doctor_id = ? AND (is_booked = 0 OR id = ?)
-");
-$slotStmt->execute([$doctor_id, $appointment['slot_id']]);
-$slots = $slotStmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Modify Appointment</title>
-</head>
-<body>
-    <h2>✏️ Modify Appointment</h2>
+<div class="container mt-5">
+    <div class="card shadow-lg">
+        <div class="card-body">
+            <h2 class="mb-4 text-center">Modify Appointment</h2>
 
-    <form action="../controllers/AppointmentController.php" method="POST">
-        <input type="hidden" name="appointment_id" value="<?= $appointment['appointment_id'] ?>">
-        <input type="hidden" name="action" value="modify">
+            <form id="modifyForm">
+                <input type="hidden" name="appointment_id" value="<?= htmlspecialchars($appointment_id) ?>">
 
-        <label>Service:</label><br>
-        <select name="service_id" required onchange="window.location.href='?appointment_id=<?= $appointment_id ?>&service_id=' + this.value;">
-            <?php foreach ($services as $service): ?>
-                <option value="<?= $service['id'] ?>" <?= $service['id'] == $service_id ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($service['name']) ?>
-                </option>
-            <?php endforeach; ?>
-        </select><br><br>
+                <!-- Service -->
+                <div class="mb-3">
+                    <label class="form-label">Service:</label>
+                    <select id="serviceSelect" name="service_id" class="form-select" required></select>
+                </div>
 
-        <label>Doctor:</label><br>
-        <select name="doctor_id" required onchange="window.location.href='?appointment_id=<?= $appointment_id ?>&service_id=<?= $service_id ?>&doctor_id=' + this.value;">
-            <?php foreach ($doctors as $doctor): ?>
-                <option value="<?= $doctor['id'] ?>" <?= $doctor['id'] == $doctor_id ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($doctor['name']) ?>
-                </option>
-            <?php endforeach; ?>
-        </select><br><br>
+                <!-- Doctor -->
+                <div class="mb-3">
+                    <label class="form-label">Doctor:</label>
+                    <select id="doctorSelect" name="doctor_id" class="form-select" required></select>
+                </div>
 
-        <label>Available Slots:</label><br>
-        <select name="slot_id" required>
-            <?php foreach ($slots as $slot): ?>
-                <option value="<?= $slot['id'] ?>" <?= $slot['id'] == $appointment['slot_id'] ? 'selected' : '' ?>>
-                    <?= date('Y-m-d H:i', strtotime($slot['slot_datetime'])) ?>
-                </option>
-            <?php endforeach; ?>
-        </select><br><br>
+                <!-- Slot -->
+                <div class="mb-4">
+                    <label class="form-label">Available Slots:</label>
+                    <select id="slotSelect" name="slot_id" class="form-select" required></select>
+                </div>
 
-        <button type="submit">✅ Update Appointment</button>
-    </form>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">Update Appointment</button>
+                </div>
+            </form>
 
-    <br>
-    <a href="my_appointments.php">🔙 Back to My Appointments</a>
-</body>
-</html>
+            <div class="text-center mt-4">
+                <a href="/appointments" class="btn btn-secondary">Back to My Appointments</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const appointmentId = <?= json_encode($appointment_id) ?>;
+
+async function loadData() {
+    const response = await fetch(`/api/appointments/show.php?id=${appointmentId}`);
+    const result = await response.json();
+    if (!result.success) return alert(result.message);
+
+    const data = result.data;
+
+    // Services
+    const servicesRes = await fetch('/api/services.php');
+    const servicesData = await servicesRes.json();
+    const serviceSelect = document.getElementById('serviceSelect');
+    servicesData.data.forEach(s => {
+        const option = new Option(s.name, s.id);
+        if (s.id == data.service_id) option.selected = true;
+        serviceSelect.append(option);
+    });
+
+    // Doctors
+    await loadDoctors(data.service_id, data.doctor_id);
+
+    // Slots
+    if (data.doctor_id) {
+    await loadSlots(data.doctor_id, data.slot_id);
+}
+
+    // Events
+    serviceSelect.addEventListener('change', async (e) => {
+        await loadDoctors(e.target.value);
+        document.getElementById('slotSelect').innerHTML = '<option value="">-- Select Time Slot --</option>';
+    });
+
+    document.getElementById('doctorSelect').addEventListener('change', (e) => {
+        loadSlots(e.target.value);
+    });
+}
+
+async function loadDoctors(serviceId, selected = null) {
+    const res = await fetch(`/api/doctors.php?service_id=${serviceId}`);
+    const data = await res.json();
+    const doctorSelect = document.getElementById('doctorSelect');
+    doctorSelect.innerHTML = '';
+    data.data.forEach(d => {
+        const option = new Option(d.name, d.id);
+        if (d.id == selected) option.selected = true;
+        doctorSelect.append(option);
+    });
+}
+
+async function loadSlots(doctorId, selected = null) {
+    const res = await fetch(`/api/slots.php?doctor_id=${doctorId}`);
+    const data = await res.json();
+    const slotSelect = document.getElementById('slotSelect');
+    slotSelect.innerHTML = '';
+    data.data.forEach(s => {
+        const option = new Option(s.slot_datetime, s.id);
+        if (s.id == selected) option.selected = true;
+        slotSelect.append(option);
+    });
+}
+
+loadData();
+
+// Form Submit
+const form = document.getElementById('modifyForm');
+form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const payload = {
+        appointment_id: appointmentId,
+        service_id: form.service_id.value,
+        doctor_id: form.doctor_id.value,
+        slot_id: form.slot_id.value
+    };
+
+    const res = await fetch('/api/appointments/update.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+
+    if (result.success) {
+        alert(result.message);
+        window.location.href = '/appointments';
+    } else {
+        alert(result.message);
+    }
+});
+</script>
+
+<?php include '../views/layouts/footer.php'; ?>

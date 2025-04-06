@@ -35,7 +35,7 @@ class Appointment implements JsonSerializable {
         }
     }
 
-    // 🔎 Find by ID
+    //  Find by ID
     public static function findById(PDO $pdo, int $id): ?self {
         $stmt = $pdo->prepare("SELECT * FROM appointments WHERE id = ?");
         $stmt->execute([$id]);
@@ -44,7 +44,7 @@ class Appointment implements JsonSerializable {
         return $data ? self::createFromArray($data) : null;
     }
 
-    // 🔍 Find by ID and User (for user-specific appointments)
+    //  Find by ID and User (for user-specific appointments)
     public static function findByIdAndUser(PDO $pdo, int $id, int $user_id): ?self {
         $stmt = $pdo->prepare("SELECT * FROM appointments WHERE id = ? AND user_id = ?");
         $stmt->execute([$id, $user_id]);
@@ -53,7 +53,7 @@ class Appointment implements JsonSerializable {
         return $data ? self::createFromArray($data) : null;
     }
 
-    // 🔨 Helper to create an Appointment object from array
+    //  Helper to create an Appointment object from array
     private static function createFromArray(array $data): self {
         return (new self())
             ->setId($data['id'])
@@ -63,7 +63,7 @@ class Appointment implements JsonSerializable {
             ->setStatus($data['status']);
     }
 
-    // 📤 For JSON serialization
+    //  For JSON serialization
     public function jsonSerialize(): array {
         return [
             'id' => $this->getId(),

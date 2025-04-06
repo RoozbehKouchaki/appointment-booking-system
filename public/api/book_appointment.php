@@ -1,21 +1,28 @@
 <?php
-require __DIR__ . '/../config/config.php';
+header('Content-Type: application/json');
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'book') {
-    require __DIR__ . '/../controllers/AppointmentController.php';
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
     exit();
 }
 
+require __DIR__ . '/../config/config.php';
 include __DIR__ . '/layouts/header.php';
+
+if (!isset($_SESSION['user_id'])) {
+    header('Location: /login');
+    exit();
+}
 
 $service_id = $_POST['service_id'] ?? null;
 $doctor_id = $_POST['doctor_id'] ?? null;
 
-// Fetch services
 $serviceStmt = $pdo->query("SELECT DISTINCT name, MIN(id) AS id FROM services GROUP BY name");
 $services = $serviceStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch doctors
 $doctors = [];
 if ($service_id) {
     $doctorStmt = $pdo->prepare("
@@ -28,7 +35,6 @@ if ($service_id) {
     $doctors = $doctorStmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// Fetch slots
 $slots = [];
 if ($doctor_id) {
     $slotStmt = $pdo->prepare("
@@ -43,9 +49,8 @@ if ($doctor_id) {
 ?>
 
 <div class="container mt-4">
-    <h2 class="text-center mb-4">📝 Book Appointment</h2>
+    <h2 class="text-center mb-4">Book Appointment</h2>
 
-    <!-- Step 1: Select Service -->
     <form method="POST" action="" class="mb-3">
         <div class="mb-3">
             <label class="form-label">Choose Service:</label>
@@ -60,7 +65,6 @@ if ($doctor_id) {
         </div>
     </form>
 
-    <!-- Step 2: Select Doctor -->
     <?php if ($service_id): ?>
         <form method="POST" action="" class="mb-3">
             <input type="hidden" name="service_id" value="<?= $service_id ?>">
@@ -78,16 +82,11 @@ if ($doctor_id) {
         </form>
     <?php endif; ?>
 
-    <!-- Step 3: Book Slot -->
     <?php if ($doctor_id): ?>
-        <form method="POST" action="/book" class="card p-3 shadow-sm">
-            <input type="hidden" name="service_id" value="<?= $service_id ?>">
-            <input type="hidden" name="doctor_id" value="<?= $doctor_id ?>">
-            <input type="hidden" name="action" value="book">
-
+        <div class="card p-3 shadow-sm">
             <div class="mb-3">
                 <label class="form-label">Choose Available Slot:</label>
-                <select name="slot_id" class="form-select" required>
+                <select id="slot_id" class="form-select" required>
                     <option value="">-- Select Time Slot --</option>
                     <?php foreach ($slots as $slot): ?>
                         <option value="<?= $slot['id'] ?>">
@@ -97,13 +96,45 @@ if ($doctor_id) {
                 </select>
             </div>
 
-            <button type="submit" class="btn btn-success w-100">✅ Book Appointment</button>
-        </form>
+            <button class="btn btn-success w-100" onclick="submitBooking()">Book Appointment</button>
+            <div id="booking-msg" class="mt-3 text-center"></div>
+        </div>
+
+        <script>
+        function submitBooking() {
+            const slotId = document.getElementById('slot_id').value;
+            const serviceId = <?= $service_id ?>;
+            const msgBox = document.getElementById('booking-msg');
+
+            if (!slotId) {
+                msgBox.innerHTML = '<div class="alert alert-warning">Please select a time slot.</div>';
+                return;
+            }
+
+            fetch('/api/appointments/book.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ service_id: serviceId, slot_id: slotId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    msgBox.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    setTimeout(() => window.location.href = '/appointments', 1500);
+                } else {
+                    msgBox.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                }
+            })
+            .catch(error => {
+                msgBox.innerHTML = '<div class="alert alert-danger">Error communicating with the server.</div>';
+            });
+        }
+        </script>
     <?php endif; ?>
 
     <div class="mt-4 text-center">
-        <a href="/" class="btn btn-secondary me-2">🔙 Back to Dashboard</a>
-        <a href="/logout" class="btn btn-danger">🚪 Logout</a>
+        <a href="/" class="btn btn-secondary me-2">Back to Dashboard</a>
+        <a href="/logout" class="btn btn-danger">Logout</a>
     </div>
 </div>
 

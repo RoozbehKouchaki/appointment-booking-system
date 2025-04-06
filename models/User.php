@@ -6,7 +6,7 @@ class User implements JsonSerializable {
     private string $email;
     private string $password;
 
-    // 🆔 Getters & Setters
+    // Getters & Setters
     public function getId(): int { return $this->id; }
     public function setId(int $id): self { $this->id = $id; return $this; }
 
@@ -18,19 +18,19 @@ class User implements JsonSerializable {
 
     public function getPassword(): string { return $this->password; }
 
-    // 🔑 Set password (hashed for new users)
+    // Set password (hashed for new users)
     public function setPassword(string $password): self {
         $this->password = password_hash($password, PASSWORD_DEFAULT);
         return $this;
     }
 
-    // 🔓 Set existing hashed password (for fetched users)
+    // Set existing hashed password (for fetched users)
     public function setHashedPassword(string $hashedPassword): self {
         $this->password = $hashedPassword;
         return $this;
     }
 
-    // 🔎 Find user by email
+    // Find user by email
     public static function findByEmail(PDO $pdo, string $email): ?self {
         $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
         $stmt->execute([$email]);
@@ -45,7 +45,7 @@ class User implements JsonSerializable {
             ->setHashedPassword($data['password']);
     }
 
-    // 💾 Save user (insert or update)
+    //  Save user (insert or update)
     public function save(PDO $pdo): void {
         if (isset($this->id)) {
             // Update existing user
@@ -59,12 +59,12 @@ class User implements JsonSerializable {
         }
     }
 
-    // ✅ Verify user password
+    //  Verify user password
     public function verifyPassword(string $password): bool {
         return password_verify($password, $this->password);
     }
 
-    // 📤 Serialize for JSON (hides password)
+    //  Serialize for JSON (hides password)
     public function jsonSerialize(): array {
         return [
             'id' => $this->id,

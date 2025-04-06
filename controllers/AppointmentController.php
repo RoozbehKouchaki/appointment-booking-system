@@ -1,27 +1,32 @@
 <?php
-session_start();
+
 require '../config/config.php';
 require '../models/Appointment.php';
 require '../models/AvailableSlot.php';
 
 if (!isset($_SESSION['user_id'])) {
-    die("❌ You must be logged in to perform this action.");
+    header('Location: /login');
+    exit();
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    die("❌ Invalid request!");
+    http_response_code(405);
+    echo "Invalid request method.";
+    exit();
 }
 
 $action = $_POST['action'] ?? null;
 $user_id = $_SESSION['user_id'];
 
-// ✅ 1️⃣ Handle Appointment Booking
+// 1. Appointment Booking
 if ($action === 'book') {
     $service_id = $_POST['service_id'] ?? null;
     $slot_id = $_POST['slot_id'] ?? null;
 
     if (!$service_id || !$slot_id) {
-        die("❌ Missing required fields.");
+        $_SESSION['flash_message'] = "Missing required fields.";
+        header('Location: /book');
+        exit();
     }
 
     try {
@@ -29,7 +34,7 @@ if ($action === 'book') {
 
         $slot = AvailableSlot::findById($pdo, $slot_id);
         if (!$slot || $slot->isBooked()) {
-            throw new Exception("⚠️ Slot is already booked or doesn't exist.");
+            throw new Exception("Slot is already booked or doesn't exist.");
         }
 
         $appointment = new Appointment();
@@ -42,34 +47,40 @@ if ($action === 'book') {
         $slot->book($pdo);
 
         $pdo->commit();
-        echo "✅ Appointment booked successfully!";
-        echo '<br><a href="../views/my_appointments.php">📅 View My Appointments</a>';
+        $_SESSION['flash_message'] = "Appointment booked successfully!";
+        header('Location: /appointments');
+        exit();
     } catch (Exception $e) {
         $pdo->rollBack();
-        echo "❌ Error: " . htmlspecialchars($e->getMessage());
+        $_SESSION['flash_message'] = "Error: " . htmlspecialchars($e->getMessage());
+        header('Location: /book');
+        exit();
     }
-    exit();
 }
 
-// ✏️ 2️⃣ Handle Appointment Modification
+// 2. Appointment Modification
 if ($action === 'modify') {
     $appointment_id = $_POST['appointment_id'] ?? null;
     $new_service_id = $_POST['service_id'] ?? null;
     $new_slot_id = $_POST['slot_id'] ?? null;
 
     if (!$appointment_id || !$new_service_id || !$new_slot_id) {
-        die("❌ All fields are required.");
+        $_SESSION['flash_message'] = "All fields are required.";
+        header("Location: /appointments");
+        exit();
     }
 
     try {
         $pdo->beginTransaction();
 
         $appointment = Appointment::findByIdAndUser($pdo, $appointment_id, $user_id);
-        if (!$appointment) throw new Exception("❌ Unauthorized appointment modification.");
+        if (!$appointment) {
+            throw new Exception("Unauthorized appointment modification.");
+        }
 
         $newSlot = AvailableSlot::findById($pdo, $new_slot_id);
         if (!$newSlot || ($newSlot->isBooked() && $appointment->getSlotId() !== $new_slot_id)) {
-            throw new Exception("⚠️ Selected slot is unavailable.");
+            throw new Exception("Selected slot is unavailable.");
         }
 
         $old_slot_id = $appointment->getSlotId();
@@ -85,21 +96,25 @@ if ($action === 'modify') {
         }
 
         $pdo->commit();
-        echo "✅ Appointment updated successfully!";
-        echo '<br><a href="../views/my_appointments.php">📅 Back to My Appointments</a>';
+        $_SESSION['flash_message'] = "Appointment updated successfully!";
+        header("Location: /appointments");
+        exit();
     } catch (Exception $e) {
         $pdo->rollBack();
-        echo "❌ Error: " . htmlspecialchars($e->getMessage());
+        $_SESSION['flash_message'] = "Error: " . htmlspecialchars($e->getMessage());
+        header("Location: /appointments");
+        exit();
     }
-    exit();
 }
 
-// ❌ 3️⃣ Handle Appointment Cancellation
+// 3. Appointment Cancellation
 if ($action === 'cancel') {
     $appointment_id = $_POST['appointment_id'] ?? null;
 
     if (!$appointment_id) {
-        die("❌ Appointment ID is missing.");
+        $_SESSION['flash_message'] = "Appointment ID is missing.";
+        header('Location: /appointments');
+        exit();
     }
 
     try {
@@ -107,11 +122,11 @@ if ($action === 'cancel') {
 
         $appointment = Appointment::findByIdAndUser($pdo, $appointment_id, $user_id);
         if (!$appointment) {
-            throw new Exception("❌ Appointment not found or unauthorized.");
+            throw new Exception("Appointment not found or unauthorized.");
         }
 
         if ($appointment->getStatus() === 'Cancelled') {
-            throw new Exception("⚠️ Appointment is already cancelled.");
+            throw new Exception("Appointment is already cancelled.");
         }
 
         $pdo->prepare("UPDATE appointments SET status = 'Cancelled' WHERE id = ?")
@@ -119,20 +134,22 @@ if ($action === 'cancel') {
 
         $slot = AvailableSlot::findById($pdo, $appointment->getSlotId());
         if ($slot) {
-            $slot->unbook($pdo);  // Free the slot
+            $slot->unbook($pdo);
         }
 
         $pdo->commit();
-        echo "✅ Appointment cancelled successfully!";
-        echo '<br><a href="../views/my_appointments.php">🔙 Back to My Appointments</a>';
+        $_SESSION['flash_message'] = "Appointment cancelled successfully!";
+        header('Location: /appointments');
+        exit();
     } catch (Exception $e) {
         $pdo->rollBack();
-        echo "❌ Error: " . htmlspecialchars($e->getMessage());
-        echo '<br><a href="../views/my_appointments.php">🔙 Try Again</a>';
+        $_SESSION['flash_message'] = "Error: " . htmlspecialchars($e->getMessage());
+        header('Location: /appointments');
+        exit();
     }
-    exit();
 }
 
-// 🚫 Catch invalid actions
-echo "❌ Invalid action.";
-?>
+// 4. Invalid Action
+$_SESSION['flash_message'] = "Invalid action.";
+header('Location: /appointments');
+exit();
